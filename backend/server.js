@@ -3,7 +3,7 @@ import cors from 'cors';
 import 'dotenv/config';
 import{ clerkMiddleware } from '@clerk/express';
 import {connectDB} from './config/db.js';
-
+import path from 'path';
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -19,6 +19,7 @@ connectDB();
 
 
 //ROUTES
+
 
 
 app.get('/', (req, res) => {
