@@ -4,6 +4,9 @@ import 'dotenv/config';
 import{ clerkMiddleware } from '@clerk/express';
 import {connectDB} from './config/db.js';
 import path from 'path';
+import invoiceRouter from './controllers/invoiceRouter.js';
+
+
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -19,6 +22,12 @@ connectDB();
 
 
 //ROUTES
+app.use('/uploads',express.static(path.join(process.cwd(),"uploads")));
+
+app.use('/api/invoice', invoiceRouter);
+
+
+
 
 
 
