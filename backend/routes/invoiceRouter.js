@@ -5,7 +5,7 @@ import { createInvoice, deleteInvoice, getInvoiceById, getInvoices, updateInvoic
 
 
 const invoiceRouter = express.Router();
-invoiceRouter.use(clerkMiddleware());
+invoiceRouter.use(clerkMiddleware()); 
 
 invoiceRouter.get("/", getInvoices);
 
