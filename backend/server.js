@@ -4,7 +4,8 @@ import 'dotenv/config';
 import{ clerkMiddleware } from '@clerk/express';
 import {connectDB} from './config/db.js';
 import path from 'path';
-import invoiceRouter from './controllers/invoiceRouter.js';
+import invoiceRouter from './routes/invoiceRouter.js';
+
 
 
 const app = express();
