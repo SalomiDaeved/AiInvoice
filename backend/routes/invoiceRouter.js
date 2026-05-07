@@ -10,7 +10,7 @@ invoiceRouter.use(clerkMiddleware());
 invoiceRouter.get("/", getInvoices);
 
 invoiceRouter.get("/:id", getInvoiceById);
-
+  
 invoiceRouter.post("/", createInvoice);
 
 invoiceRouter.put("/:id", updateInvoice);
