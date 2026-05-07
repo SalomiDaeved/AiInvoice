@@ -6,6 +6,7 @@ import {connectDB} from './config/db.js';
 import path from 'path';
 import invoiceRouter from './routes/invoiceRouter.js';
 import businessProfileRouter from './routes/businessProfileRouter.js';
+import aiInvoiceRouter from './routes/aiInvoiceRouter.js';
 
 
 
@@ -29,6 +30,8 @@ app.use('/uploads',express.static(path.join(process.cwd(),"uploads")));
 app.use('/api/invoice', invoiceRouter);
 
 app.use('/api/businessProfile', businessProfileRouter);
+
+app.use('/api/ai',aiInvoiceRouter);
 
 
 
