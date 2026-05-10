@@ -1,4 +1,4 @@
-// src/assets/dummyStyles.js
+// src/assets/Styles.js
 export const aiInvoiceModalStyles = {
   overlay: "fixed inset-0 z-50 flex items-center justify-center p-4",
   backdrop: "absolute inset-0 bg-black opacity-30",
@@ -14,7 +14,7 @@ export const aiInvoiceModalStyles = {
   generateButton: "px-4 py-2 rounded-md bg-indigo-600 text-white text-sm disabled:opacity-60"
 };
 
-// src/assets/dummyStyles.js
+// src/assets/Styles.js
 export const businessProfileStyles = {
   // Layout
   pageContainer: "space-y-8 font-[pacifico]",
@@ -90,7 +90,7 @@ export const customStyles = {
   taxPercentage: "text-2xl font-bold text-gray-600"
 };
 
-// src/assets/dummyStyles.js (add these to the existing export)
+// src/assets/Styles.js (add these to the existing export)
 export const aiReminderModalStyles = {
   overlay: "fixed inset-0 z-50 flex items-center justify-center p-4",
   backdrop: "absolute inset-0 bg-black opacity-30",
@@ -114,7 +114,7 @@ export const aiReminderModalStyles = {
   generateButton: "px-4 py-2 rounded-md bg-indigo-600 text-white text-sm"
 };
 
-// Add to src/assets/dummyStyles.js (after the existing styles)
+// Add to src/assets/Styles.js (after the existing styles)
 
 export const createInvoiceStyles = {
   // Layout
@@ -372,7 +372,7 @@ export const appShellStyles = {
   mainContainer: "max-w-7xl mx-auto"
 };
 
-// Add to src/assets/dummyStyles.js (after the existing styles)
+// Add to src/assets/Styles.js (after the existing styles)
 
 export const dashboardStyles = {
   // Layout
@@ -455,8 +455,8 @@ export const dashboardStyles = {
   quickActionIconGray: "bg-gray-100"
 };
 
-// src/assets/dummyStyles.js (add these to the existing export)
-// Add to src/assets/dummyStyles.js (after the existing styles)
+// src/assets/Styles.js (add these to the existing export)
+// Add to src/assets/Styles.js (after the existing styles)
 
 export const invoicesStyles = {
   // Layout
@@ -573,7 +573,7 @@ export const invoicesStyles = {
   paginationNumberInactive: "text-gray-600 hover:bg-gray-100"
 };
 
-// Add to src/assets/dummyStyles.js (after the existing styles)
+// Add to src/assets/Styles.js (after the existing styles)
 
 export const featuresStyles = {
   // Section
@@ -619,7 +619,7 @@ export const featuresStyles = {
   bottomCtaButtonIcon: "w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform duration-300"
 };
 
-// src/assets/dummyStyles.js (add these to the existing export)
+// src/assets/Styles.js (add these to the existing export)
 export const heroStyles = {
   // Section
   section: "relative min-h-screen pb-16 flex items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20",
@@ -752,7 +752,7 @@ export const heroStyles = {
   scrollDot: "w-1 h-3 bg-gray-400 rounded-full mt-2 animate-bounce"
 };
 
-// Add to src/assets/dummyStyles.js (after the existing styles)
+// Add to src/assets/Styles.js (after the existing styles)
 
 export const invoicePreviewStyles = {
   // Layout
@@ -851,7 +851,7 @@ export const invoicePreviewStyles = {
   emptyStateMessage: "text-gray-600 mt-2 max-w-md mx-auto",
   emptyStateButton: "inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg"
 };
-// src/assets/dummyStyles.js (add these to the existing export)
+// src/assets/Styles.js (add these to the existing export)
 export const pricingStyles = {
   // Section
   section: "relative py-24 bg-gradient-to-b from-gray-50 to-white overflow-hidden",
@@ -953,7 +953,7 @@ export const pricingCardStyles = {
   cornerAccent2: "absolute -bottom-2 -left-2 w-6 h-6 border-b-2 border-l-2 border-indigo-500 rounded-bl-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-30"
 };
 
-// Add to src/assets/dummyStyles.js (after the existing styles)
+// Add to src/assets/Styles.js (after the existing styles)
 
 export const authStyles = {
   // Layout
@@ -989,7 +989,7 @@ export const authStyles = {
   eyeOffIcon: "w-5 h-5"
 };
 
-// src/assets/dummyStyles.js (add these to the existing export)
+// src/assets/Styles.js (add these to the existing export)
 export const navbarStyles = {
   // Header
   header: "fixed w-full z-30 bg-white/80 backdrop-blur-sm border-b border-gray-100",
@@ -1037,7 +1037,7 @@ export const navbarStyles = {
   mobileSignUp: "block mt-2 px-4 py-2 rounded-md bg-indigo-600 text-white text-center"
 };
 
-// Add to src/assets/dummyStyles.js (after the existing styles)
+// Add to src/assets/Styles.js (after the existing styles)
 
 export const kpiCardStyles = {
   // Card Container
@@ -1097,7 +1097,7 @@ export const kpiCardStyles = {
   }
 };
 
-// src/assets/dummyStyles.js (add these to the existing export)
+// src/assets/Styles.js (add these to the existing export)
 export const loginStyles = {
   // Layout
   root: "min-h-screen bg-white text-gray-800 antialiased",
@@ -1136,7 +1136,7 @@ export const loginStyles = {
   signupLink: "text-indigo-600 hover:underline"
 };
 
-// src/assets/dummyStyles.js (add these to the existing export)
+// src/assets/Styles.js (add these to the existing export)
 export const footerStyles = {
   // Footer Container
   footer: "mt-24 border-t border-gray-100 bg-white",
