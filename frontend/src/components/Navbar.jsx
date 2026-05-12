@@ -1,17 +1,103 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { navbarStyles } from '../assets/Styles.js';
 import logo from '../assets/logo.png';
-import { SignedOut, useClerk } from '@clerk/clerk-react';
+import { SignedOut, useClerk, useAuth } from '@clerk/clerk-react';
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const [mobileHover, setMobileHover] = useState(false);
 
+  // FIXED ERROR
+  const [profileOpen, setProfileOpen] = useState(false);
+
   const clerk = useClerk();
   const navigate = useNavigate();
+  const profileRef = useRef(null);
 
+  const { getToken, isSignedIn } = useAuth();
+
+  const TOKEN_KEY = 'token';
+
+  // TOKEN GENERATION
+  const fetchAndStoreToken = useCallback(
+    async (options = {}) => {
+      try {
+        if (!getToken) {
+          return null;
+        }
+
+        const token = await getToken(options).catch(() => null);
+
+        if (token) {
+          try {
+            localStorage.setItem(TOKEN_KEY, token);
+            console.log(token);
+          } catch (e) {
+            console.log(e);
+          }
+
+          return token;
+        } else {
+          return null;
+        }
+      } catch (err) {
+        return null;
+      }
+    },
+    [getToken]
+  );
+
+  // KEEP TOKEN SYNCED
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      if (isSignedIn) {
+        const t = await fetchAndStoreToken({
+          template: 'default',
+        }).catch(() => null);
+
+        if (!t && mounted) {
+          await fetchAndStoreToken({
+            forceRefresh: true,
+          }).catch(() => null);
+        }
+      } else {
+        try {
+          localStorage.removeItem(TOKEN_KEY);
+        } catch {}
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isSignedIn, fetchAndStoreToken]);
+
+  // CLOSE PROFILE POPOVER
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!profileRef.current) return;
+
+      if (!profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+    }
+
+    if (profileOpen) {
+      document.addEventListener('mousedown', onDocClick);
+      document.addEventListener('touchstart', onDocClick);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('touchstart', onDocClick);
+    };
+  }, [profileOpen]);
+
+  // OPEN SIGN IN
   function openSignIn() {
     try {
       clerk?.openSignIn ? clerk.openSignIn() : navigate('/login');
@@ -20,6 +106,23 @@ const Navbar = () => {
     }
   }
 
+  // REDIRECT AFTER LOGIN
+  useEffect(() => {
+    if (isSignedIn) {
+      const pathname = window.location.pathname || '/';
+
+      if (
+        pathname === '/login' ||
+        pathname === '/signup' ||
+        pathname.startsWith('/auth') ||
+        pathname === '/'
+      ) {
+        navigate('/app/dashboard', { replace: true });
+      }
+    }
+  }, [isSignedIn, navigate]);
+
+  // OPEN SIGN UP
   function openSignUp() {
     try {
       clerk?.openSignUp ? clerk.openSignUp() : navigate('/signup');
@@ -32,28 +135,32 @@ const Navbar = () => {
     <header className={navbarStyles.header}>
       <div className={navbarStyles.container}>
         <nav className={navbarStyles.nav}>
-
           {/* LOGO */}
           <div className={navbarStyles.logoSection}>
             <Link to="/" className={navbarStyles.logoLink}>
               <img src={logo} alt="Logo" className={navbarStyles.logoImage} />
+
               <span className={navbarStyles.logoText}>InvoiceAI</span>
             </Link>
 
+            {/* DESKTOP NAV */}
             <div className={navbarStyles.desktopNav}>
-              <a href="#features" className={navbarStyles.navLink}>Features</a>
-              <a href="#pricing" className={navbarStyles.navLinkInactive}>Pricing</a>
+              <a href="#features" className={navbarStyles.navLink}>
+                Features
+              </a>
+
+              <a href="#pricing" className={navbarStyles.navLinkInactive}>
+                Pricing
+              </a>
             </div>
           </div>
 
           {/* RIGHT SIDE */}
           <div className="flex items-center gap-4">
-
             <SignedOut>
-
               {/* DESKTOP BUTTONS */}
               <div className="hidden md:flex items-center gap-3">
-
+                {/* SIGN IN */}
                 <button
                   onClick={openSignIn}
                   className={navbarStyles.signInButton}
@@ -61,45 +168,63 @@ const Navbar = () => {
                   Sign In
                 </button>
 
+                {/* GET STARTED */}
                 <button
                   onClick={openSignUp}
                   onMouseEnter={() => setHover(true)}
                   onMouseLeave={() => setHover(false)}
                   type="button"
                   style={{
-                    position: "relative",
-                    backgroundColor: "#2563eb",
-                    padding: "12px 24px",
-                    borderRadius: "9999px",
-                    border: "none",
-                    cursor: "pointer",
-                    overflow: "hidden",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    boxShadow: "0 4px 10px rgba(0,0,0,0.1)",
-                    transform: hover ? "translateY(-2px)" : "translateY(0)",
-                    transition: "all 0.2s ease",
+                    position: 'relative',
+                    backgroundColor: '#2563eb',
+                    padding: '12px 24px',
+                    borderRadius: '9999px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                    transform: hover
+                      ? 'translateY(-2px)'
+                      : 'translateY(0)',
+                    transition: 'all 0.2s ease',
                   }}
                 >
+                  {/* OVERLAY */}
                   <div
                     style={{
-                      position: "absolute",
+                      position: 'absolute',
                       top: 0,
-                      left: hover ? "0%" : "-100%",
-                      width: "100%",
-                      height: "100%",
-                      background: "rgba(255,255,255,0.15)",
-                      transition: "left 0.4s ease",
+                      left: hover ? '0%' : '-100%',
+                      width: '100%',
+                      height: '100%',
+                      background: 'rgba(255,255,255,0.15)',
+                      transition: 'left 0.4s ease',
                     }}
                   />
 
-                  <span style={{ color: "#fff", fontWeight: 600, fontSize: 14, position: "relative", zIndex: 1 }}>
+                  <span
+                    style={{
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 14,
+                      position: 'relative',
+                      zIndex: 1,
+                    }}
+                  >
                     Get Started
                   </span>
 
                   <svg
-                    style={{ width: 18, height: 18, color: "#fff", position: "relative", zIndex: 1 }}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      color: '#fff',
+                      position: 'relative',
+                      zIndex: 1,
+                    }}
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -108,64 +233,74 @@ const Navbar = () => {
                     <path d="M5 12h14m-7-7l7 7-7 7" />
                   </svg>
                 </button>
-
               </div>
-
             </SignedOut>
 
-            {/* MOBILE MENU ICON (ONLY MOBILE) */}
+            {/* MOBILE MENU ICON */}
             <button
               onClick={() => setOpen(!open)}
               className="md:hidden"
             >
               <div className="flex flex-col justify-center items-center w-8 h-8 gap-1">
-
+                {/* LINE 1 */}
                 <span
                   style={{
-                    width: "22px",
-                    height: "2px",
-                    backgroundColor: "#000",
-                    transition: "0.3s",
-                    transform: open ? "rotate(45deg) translate(5px, 5px)" : "none",
+                    width: '22px',
+                    height: '2px',
+                    backgroundColor: '#000',
+                    transition: '0.3s',
+                    transform: open
+                      ? 'rotate(45deg) translate(5px, 5px)'
+                      : 'none',
                   }}
                 />
 
+                {/* LINE 2 */}
                 <span
                   style={{
-                    width: "22px",
-                    height: "2px",
-                    backgroundColor: "#000",
-                    transition: "0.3s",
+                    width: '22px',
+                    height: '2px',
+                    backgroundColor: '#000',
+                    transition: '0.3s',
                     opacity: open ? 0 : 1,
                   }}
                 />
 
+                {/* LINE 3 */}
                 <span
                   style={{
-                    width: "22px",
-                    height: "2px",
-                    backgroundColor: "#000",
-                    transition: "0.3s",
-                    transform: open ? "rotate(-45deg) translate(5px, -5px)" : "none",
+                    width: '22px',
+                    height: '2px',
+                    backgroundColor: '#000',
+                    transition: '0.3s',
+                    transform: open
+                      ? 'rotate(-45deg) translate(5px, -5px)'
+                      : 'none',
                   }}
                 />
-
               </div>
             </button>
-
           </div>
         </nav>
       </div>
 
       {/* MOBILE MENU */}
-      <div className={`${open ? "block" : "hidden"} ${navbarStyles.mobileMenu}`}>
+      <div
+        className={`${open ? 'block' : 'hidden'} ${
+          navbarStyles.mobileMenu
+        }`}
+      >
         <div className={navbarStyles.mobileMenuContainer}>
+          <a href="#features" className={navbarStyles.mobileNavLink}>
+            Features
+          </a>
 
-          <a href="#features" className={navbarStyles.mobileNavLink}>Features</a>
-          <a href="#pricing" className={navbarStyles.mobileNavLink}>Pricing</a>
+          <a href="#pricing" className={navbarStyles.mobileNavLink}>
+            Pricing
+          </a>
 
           <SignedOut>
-
+            {/* MOBILE SIGN IN */}
             <button
               onClick={openSignIn}
               className={navbarStyles.mobileSignIn}
@@ -179,40 +314,56 @@ const Navbar = () => {
               onMouseEnter={() => setMobileHover(true)}
               onMouseLeave={() => setMobileHover(false)}
               style={{
-                position: "relative",
-                backgroundColor: "#2563eb",
-                padding: "10px 20px",
-                borderRadius: "9999px",
-                border: "none",
-                cursor: "pointer",
-                overflow: "hidden",
-                width: "100%",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "8px",
-                transform: mobileHover ? "translateY(-2px)" : "translateY(0)",
-                transition: "all 0.2s ease",
+                position: 'relative',
+                backgroundColor: '#2563eb',
+                padding: '10px 20px',
+                borderRadius: '9999px',
+                border: 'none',
+                cursor: 'pointer',
+                overflow: 'hidden',
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '8px',
+                transform: mobileHover
+                  ? 'translateY(-2px)'
+                  : 'translateY(0)',
+                transition: 'all 0.2s ease',
               }}
             >
+              {/* OVERLAY */}
               <div
                 style={{
-                  position: "absolute",
+                  position: 'absolute',
                   top: 0,
-                  left: mobileHover ? "0%" : "-100%",
-                  width: "100%",
-                  height: "100%",
-                  background: "rgba(255,255,255,0.15)",
-                  transition: "left 0.4s ease",
+                  left: mobileHover ? '0%' : '-100%',
+                  width: '100%',
+                  height: '100%',
+                  background: 'rgba(255,255,255,0.15)',
+                  transition: 'left 0.4s ease',
                 }}
               />
 
-              <span style={{ color: "#fff", fontWeight: 600, position: "relative", zIndex: 1 }}>
+              <span
+                style={{
+                  color: '#fff',
+                  fontWeight: 600,
+                  position: 'relative',
+                  zIndex: 1,
+                }}
+              >
                 Get Started
               </span>
 
               <svg
-                style={{ width: 18, height: 18, color: "#fff", position: "relative", zIndex: 1 }}
+                style={{
+                  width: 18,
+                  height: 18,
+                  color: '#fff',
+                  position: 'relative',
+                  zIndex: 1,
+                }}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -220,14 +371,10 @@ const Navbar = () => {
               >
                 <path d="M5 12h14m-7-7l7 7-7 7" />
               </svg>
-
             </button>
-
           </SignedOut>
-
         </div>
       </div>
-
     </header>
   );
 };
