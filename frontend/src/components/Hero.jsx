@@ -2,7 +2,7 @@ import React from 'react'
 import { heroStyles } from '../assets/Styles.js'
 import { SignedIn, SignedOut, useClerk } from '@clerk/clerk-react'
 import { useNavigate } from 'react-router-dom'
-import StatuseBadge from './StatuseBadge.jsx';
+import StatuseBadge from './StatusBadge.jsx';
 
 const Hero = () => {
   const navigate = useNavigate()
@@ -154,7 +154,7 @@ const Hero = () => {
 
             </div>
           </div>
-          {/*  Righ side */}
+          {/*  Right side */}
 
           <div className={heroStyles.demoColumn}>
              <div className={heroStyles.demoFloating1}> </div>
@@ -175,7 +175,7 @@ const Hero = () => {
                                            </div>
 
                                            <div className={heroStyles.cardClientGst}>
-                                            GST : 27S273AO2VK6
+                                            VAT : 15%
                                            </div>
 
 
@@ -213,10 +213,10 @@ const Hero = () => {
                             {[
                     {
                       description: "Website Design & Development",
-                      amount: "₹15,000",
+                      amount: "LKR 15,000",
                     },
-                    { description: "Consultation (2 hours)", amount: "₹3,000" },
-                    { description: "Premium Hosting Setup", amount: "₹2,500" },
+                    { description: "Consultation (2 hours)", amount: "LKR 3,000" },
+                    { description: "Premium Hosting Setup", amount: "LKR 2,500" },
                   ].map((item, index) => (
 
                     <div key = {index} className={heroStyles.itemRow}>
@@ -242,17 +242,17 @@ const Hero = () => {
                     <span className={heroStyles.calculationLabel}>
                       Subtotal
                     </span>
-                    <span className={heroStyles.calculationValue}>₹20,500</span>
+                    <span className={heroStyles.calculationValue}>LKR 20,500</span>
                   </div>
                   <div className={heroStyles.calculationRow}>
                     <span className={heroStyles.calculationLabel}>
-                      GST (18%)
+                      VAT (15%)
                     </span>
-                    <span className={heroStyles.calculationValue}>₹3,240</span>
+                    <span className={heroStyles.calculationValue}>LKR 3,075</span>
                   </div>
                   <div className={heroStyles.totalRow}>
                     <span className={heroStyles.totalLabel}>Total Amount</span>
-                    <span className={heroStyles.totalValue}>₹23,740</span>
+                    <span className={heroStyles.totalValue}>LKR 23,575</span>
                   </div>
                 </div>
 
@@ -265,19 +265,7 @@ const Hero = () => {
         <span className={heroStyles.sendButtonText}>  Send Invoice</span>
       </button>
 
-
-
-    
-
-
     </div>
-
-
-                          
-
-
-
-
 
     </div>
 
@@ -286,7 +274,7 @@ const Hero = () => {
         <div className={heroStyles.aiIndicatorDot}> </div>
         <span> AI parsed from :  </span>
         <span className={heroStyles.aiIndicatorText}> 
-          " Invoice for web design - $ 15,000..."
+          " Invoice for web design - LKR 15,000..."
         </span>
        </div>
     </div>
@@ -295,9 +283,6 @@ const Hero = () => {
     <div className={heroStyles.cornerAccent2}> </div>
 
     <div className={heroStyles.cardBackground}></div>
-
-
-
 
   </div>
             
@@ -315,15 +300,10 @@ const Hero = () => {
       </div>
     </div>
 
-
-
-
         </div>
       </div>
     </section>
   )
 };
-
-
 
 export default Hero

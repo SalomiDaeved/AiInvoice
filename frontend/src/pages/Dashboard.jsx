@@ -10,7 +10,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 
 import KpiCard from "../components/KpiCard.jsx";
-import StatuseBadge from "../components/StatuseBadge.jsx";
+import StatusBadge from "../components/StatusBadge.jsx"; // ✅ FIX 1: Fixed typo (was "StatuseBadge") + ✅ FIX 2: Removed unused "CreateInvoice" import
+
 
 const API_BASE = "http://localhost:4000";
 
@@ -1020,7 +1021,7 @@ const Dashboard = () => {
                             dashboardStyles.tableCell
                           }
                         >
-                          <StatuseBadge
+                          <StatusBadge
                             status={inv.status}
                             size="default"
                             showIcon={true}

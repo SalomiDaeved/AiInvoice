@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
-import StatusBadge from "../components/StatuseBadge.jsx";
+import StatusBadge from "../components/StatusBadge.jsx"; // ✅ FIX: Removed extra "e" (was "StatuseBadge")
 import {
   createInvoiceStyles,
   createInvoiceIconColors,
@@ -98,27 +98,6 @@ function computeTotals(items = [], taxPercent = 0) {
   const tax = (subtotal * Number(taxPercent || 0)) / 100;
   const total = subtotal + tax;
   return { subtotal, tax, total };
-}
-
-/* ---------- helper: convert dataURL to File ---------- */
-function dataURLtoFile(dataurl, filename = "file") {
-  if (!dataurl || dataurl.indexOf(",") === -1) return null;
-  const arr = dataurl.split(",");
-  const mimeMatch = arr[0].match(/:(.*?);/);
-  const mime = mimeMatch ? mimeMatch[1] : "application/octet-stream";
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-  try {
-    return new File([u8arr], filename, { type: mime });
-  } catch {
-    const blob = new Blob([u8arr], { type: mime });
-    blob.name = filename;
-    return blob;
-  }
 }
 
 /* ---------- icons ---------- (kept same as before) */
@@ -342,8 +321,6 @@ export default function CreateInvoice() {
           { method: "GET", headers }
         );
         if (!res.ok) {
-          // if unauthorized or server error, treat as "not found" to avoid blocking generation;
-          // collisions will still be caught on save (server returns 409).
           return false;
         }
         const json = await res.json().catch(() => null);
@@ -351,7 +328,6 @@ export default function CreateInvoice() {
         if (Array.isArray(data) && data.length > 0) return true;
         return false;
       } catch (err) {
-        // network / other error -> assume not exists (we rely on server-side check on save)
         return false;
       }
     },
@@ -368,12 +344,9 @@ export default function CreateInvoice() {
           .replace(/-/g, "");
         const rand = Math.floor(Math.random() * 9000) + 1000; // 4 digit
         const candidate = `INV-${datePart}-${rand}`;
-        // quick local check first
         const exists = await checkInvoiceExists(candidate);
         if (!exists) return candidate;
-        // else loop to try again
       }
-      // fallback: use uid suffix if all attempts collide (very unlikely)
       return `INV-${new Date()
         .toISOString()
         .slice(0, 10)
@@ -399,7 +372,6 @@ export default function CreateInvoice() {
           },
         });
         if (!res.ok) {
-          // don't throw — just ignore profile if not accessible
           return;
         }
         const json = await res.json().catch(() => null);
@@ -422,7 +394,6 @@ export default function CreateInvoice() {
 
         setProfile(serverProfile);
 
-        // Merge into invoice only if those invoice fields are empty/unset
         setInvoice((prev) => {
           if (!prev) return prev;
           const shouldOverwriteBusinessName =
@@ -492,9 +463,7 @@ export default function CreateInvoice() {
     let mounted = true;
 
     async function prepare() {
-      // If AI/Gemini passed an invoice via location.state
       if (invoiceFromState) {
-        // merge then normalize any image URLs that may be `http://localhost:...`
         const base = { ...buildDefaultInvoice(), ...invoiceFromState };
 
         base.logoDataUrl =
@@ -521,7 +490,6 @@ export default function CreateInvoice() {
         return;
       }
 
-      // If editing and no invoiceFromState then fetch from server (or local fallback)
       if (isEditing && !invoiceFromState) {
         setLoading(true);
         try {
@@ -541,7 +509,6 @@ export default function CreateInvoice() {
               merged.id = data._id ?? data.id ?? merged.id;
               merged.invoiceNumber = data.invoiceNumber ?? merged.invoiceNumber;
 
-              // normalize server-returned image fields (rewrite localhost/relative -> API_BASE)
               merged.logoDataUrl =
                 resolveImageUrl(
                   data.logoDataUrl ?? data.logoUrl ?? data.logo
@@ -570,7 +537,6 @@ export default function CreateInvoice() {
             }
           }
         } catch (err) {
-          // ignore and fallback
           console.warn(
             "Server invoice fetch failed, will fallback to local:",
             err
@@ -615,12 +581,9 @@ export default function CreateInvoice() {
         return;
       }
 
-      // Creating new (neither editing nor invoiceFromState)
-      // Build default invoice then generate unique invoiceNumber and set it
       setInvoice((prev) => ({ ...buildDefaultInvoice(), ...prev }));
       setItems(buildDefaultInvoice().items);
 
-      // generate unique invoice number for new invoices
       if (!isEditing) {
         try {
           const candidate = await generateUniqueInvoiceNumber(10);
@@ -630,7 +593,6 @@ export default function CreateInvoice() {
             );
           }
         } catch (err) {
-          // ignore, keep empty (server will handle on save)
           console.warn("Invoice number generation failed:", err);
         }
       }
@@ -656,7 +618,6 @@ export default function CreateInvoice() {
     setLoading(true);
 
     try {
-      // Build prepared object but OMIT invoiceNumber when empty so server auto-generates.
       const prepared = {
         issueDate: invoice.issueDate || "",
         dueDate: invoice.dueDate || "",
@@ -682,7 +643,6 @@ export default function CreateInvoice() {
         localId: invoice.id,
       };
 
-      // include invoiceNumber only if provided (we prefill for new invoices)
       if (
         invoice.invoiceNumber &&
         String(invoice.invoiceNumber).trim().length > 0
@@ -696,7 +656,6 @@ export default function CreateInvoice() {
           : `${API_BASE}/api/invoice`;
       const method = isEditing && invoice.id ? "PUT" : "POST";
 
-      // try to obtain Clerk token; if present include Authorization
       const token = await obtainToken();
       const headers = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -707,11 +666,9 @@ export default function CreateInvoice() {
         body: JSON.stringify(prepared),
       });
 
-      // handle conflict (409) when user supplied invoiceNumber already exists
       if (res.status === 409) {
         const json = await res.json().catch(() => null);
         const message = json?.message || "Invoice number already exists.";
-        // Let the user decide — do not auto-retry; they may want to pick a different number.
         throw new Error(message);
       }
 
@@ -724,7 +681,6 @@ export default function CreateInvoice() {
       const saved = json?.data || json || null;
       const savedId = saved?._id ?? saved?.id ?? invoice.id;
 
-      // Use server-provided invoiceNumber (if server generated one)
       const merged = {
         ...prepared,
         id: savedId,
@@ -740,7 +696,6 @@ export default function CreateInvoice() {
       setInvoice((inv) => ({ ...inv, ...merged }));
       setItems(Array.isArray(saved?.items) ? saved.items : items);
 
-      // update local stored invoices (keep local fallback in sync)
       const all = getStoredInvoices();
       if (isEditing) {
         const idx = all.findIndex(
@@ -753,7 +708,6 @@ export default function CreateInvoice() {
         if (idx >= 0) all[idx] = merged;
         else all.unshift(merged);
       } else {
-        // For newly created, use server's invoiceNumber/id if provided
         all.unshift(merged);
       }
       saveStoredInvoices(all);
@@ -763,7 +717,6 @@ export default function CreateInvoice() {
     } catch (err) {
       console.error("Failed to save invoice to server:", err);
 
-      // If it was a 409 conflict (duplicate invoice number provided by user), show message and let user fix.
       if (
         String(err?.message || "")
           .toLowerCase()
@@ -824,7 +777,7 @@ export default function CreateInvoice() {
 
   const totals = computeTotals(items, invoice?.taxPercent ?? 18);
 
-  /* ---------- JSX (kept structure, invoiceNumber input prefills generated value) ---------- */
+  /* ---------- JSX ---------- */
   return (
     <div className={createInvoiceStyles.pageContainer}>
       {/* Header Section */}
@@ -862,6 +815,7 @@ export default function CreateInvoice() {
           </button>
         </div>
       </div>
+
       {/* Invoice Header Section */}
       <div className={createInvoiceStyles.cardContainer}>
         <div className={createInvoiceStyles.cardHeaderContainer}>
@@ -1007,7 +961,8 @@ export default function CreateInvoice() {
           </div>
         </div>
       </div>
-      {/* Main Content Grid - left & right columns remain unchanged except they use `invoice` state */}
+
+      {/* Main Content Grid */}
       <div className={createInvoiceStyles.mainGrid}>
         <div className={createInvoiceStyles.leftColumn}>
           {/* Bill From */}
@@ -1030,7 +985,6 @@ export default function CreateInvoice() {
                 </div>
                 <h3 className={createInvoiceStyles.cardTitle}>Bill From</h3>
               </div>
-              {/* Save as Profile button removed */}
             </div>
 
             <div className={createInvoiceStyles.gridCols2}>
@@ -1652,8 +1606,7 @@ export default function CreateInvoice() {
             </div>
           </div>
         </div>
-      </div>{" "}
-      {/* end main grid */}
+      </div>
     </div>
   );
 }

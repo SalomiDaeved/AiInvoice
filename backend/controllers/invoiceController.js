@@ -409,36 +409,42 @@ export async function updateInvoice(req, res) {
 
 // DELETE INVOICE
 export async function deleteInvoice(req, res) {
-    try {
+  try {
+    const { userId } = getAuth(req) || {};
 
-        const { userId } = getAuth(req) || {};
-        if (!userId) {
-          return res
-            .status(401)
-            .json({ success: false, message: "Authentication required" });
-        }  
-        
-        const { id } = req.params;
-        const query = isObjectIdString(id) ? { _id: id, owner: userId } : { invoiceNumber: id, owner: userId };
-
-        const found = await Invoice.findOne(query);
-        if (!found) {
-          return res.status(404).json({ success: false, message: "Invoice not found" });
-
-          await Invoice.deleteOne({ _id: found._id });
-          return res.status(200).json({ success: true, message: "Invoice deleted" });   
-
-        }
-       
-
-
-
-
-        
-    } catch (error) {
-        console.error("deleteInvoice error:", error);
-        return res.status(500).json({ success: false, message: "Server error" });       
-        
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
     }
+
+    const { id } = req.params;
+
+    const query = isObjectIdString(id)
+      ? { _id: id, owner: userId }
+      : { invoiceNumber: id, owner: userId };
+
+    const found = await Invoice.findOne(query);
+
+    if (!found) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice not found",
+      });
+    }
+
+    await Invoice.deleteOne({ _id: found._id });
+
+    return res.status(200).json({
+      success: true,
+      message: "Invoice deleted",
+    });
+  } catch (error) {
+    console.error("deleteInvoice error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
 }
-    
