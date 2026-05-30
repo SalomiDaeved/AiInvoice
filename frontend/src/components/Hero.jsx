@@ -2,6 +2,7 @@ import React from 'react'
 import { heroStyles } from '../assets/Styles.js'
 import { SignedIn, SignedOut, useClerk } from '@clerk/clerk-react'
 import { useNavigate } from 'react-router-dom'
+import StatuseBadge from './StatuseBadge.jsx';
 
 const Hero = () => {
   const navigate = useNavigate()
@@ -321,6 +322,8 @@ const Hero = () => {
       </div>
     </section>
   )
-}
+};
+
+
 
 export default Hero
