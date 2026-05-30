@@ -52,8 +52,8 @@ const App = () => {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path ="invoices" element={<Invoices/>}/>
           <Route path ="invoices/new" element={<CreateInvoice/>}/>
-          <Route path ="invoice/:id" element ={<InvoicePreview/>} />
-          <Route path ="invoice/:id/preview"  element ={<InvoicePreview/>} />
+          <Route path ="invoices/:id" element ={<InvoicePreview/>} />
+          <Route path ="invoices/:id/preview"  element ={<InvoicePreview/>} />
           <Route path ="invoices/:id/edit" element={<CreateInvoice/>}/>
 
            <Route path="create-invoice" element={<CreateInvoice />} />
