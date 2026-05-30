@@ -3,12 +3,14 @@ import { Route, Routes } from "react-router-dom";
 import Home from "./pages/Home.jsx";
 import AppShell from "./components/AppShell.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import CreateInvoice from "./pages/CreateInvoice.jsx";
 import {
   RedirectToSignIn,
   SignedIn,
   SignedOut,
   useAuth,
 } from "@clerk/clerk-react";
+
 
 // ✅ Safer Protected Route (fixes session 404 timing issue)
 const ClerkProtected = ({ children }) => {
@@ -45,6 +47,7 @@ const App = () => {
         >
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
+           <Route path="create-invoice" element={<CreateInvoice />} />
         </Route>
       </Routes>
     </div>
