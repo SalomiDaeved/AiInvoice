@@ -1157,3 +1157,5 @@ export const footerStyles = {
   link:
     "text-sm md:text-sm lg:text-base text-gray-600 hover:text-indigo-600 transition-colors duration-200"
 };
+
+

@@ -12,6 +12,7 @@ import {
   useAuth,
 } from "@clerk/clerk-react";
 import InvoicePreview from "./components/InvoicePreview.jsx";
+import BusinessProfile from "./pages/BusinessProfile.jsx";
 
 
 
@@ -57,6 +58,8 @@ const App = () => {
           <Route path ="invoices/:id/edit" element={<CreateInvoice/>}/>
 
            <Route path="create-invoice" element={<CreateInvoice />} />
+
+           <Route path ="business" element= {<BusinessProfile/>}/>
         </Route>
       </Routes>
     </div>

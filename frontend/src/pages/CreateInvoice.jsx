@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
-import StatusBadge from "../components/StatusBadge.jsx"; // ✅ FIX: Removed extra "e" (was "StatuseBadge")
+import StatusBadge from "../components/StatusBadge.jsx";
 import {
   createInvoiceStyles,
   createInvoiceIconColors,
@@ -11,80 +11,100 @@ import {
 /* ---------- API BASE ---------- */
 const API_BASE = "http://localhost:4000";
 
-/* ---------- storage helpers (unchanged) ---------- */
-/* ----------------- frontend-only: normalize image URLs ----------------- */
+/* ---------- IMAGE URL RESOLVER ---------- */
 function resolveImageUrl(url) {
   if (!url) return null;
+  
   const s = String(url).trim();
-
-  // keep data/blobs as-is
-  if (s.startsWith("data:") || s.startsWith("blob:")) return s;
-
-  // absolute http(s)
+  
+  // Already a data URL or blob URL
+  if (s.startsWith("data:") || s.startsWith("blob:")) {
+    console.log("URL is already data/blob:", s.slice(0, 50));
+    return s;
+  }
+  
+  // Already an absolute HTTP(S) URL
   if (/^https?:\/\//i.test(s)) {
     try {
       const parsed = new URL(s);
       if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-        // rewrite localhost -> API_BASE (preserve path/search/hash)
-        const path =
-          parsed.pathname + (parsed.search || "") + (parsed.hash || "");
-        return `${API_BASE.replace(/\/+$/, "")}${path}`;
+        const path = parsed.pathname + (parsed.search || "") + (parsed.hash || "");
+        const result = `${API_BASE.replace(/\/+$/, "")}${path}`;
+        console.log("Resolved localhost URL:", result);
+        return result;
       }
+      console.log("Keeping external URL:", parsed.href);
       return parsed.href;
     } catch (e) {
-      // fall through to relative handling
+      console.warn("Invalid absolute URL:", s, e);
+      return null;
     }
   }
-
-  // relative paths like "/uploads/..." or "uploads/..." -> prefix with API_BASE
-  return `${API_BASE.replace(/\/+$/, "")}/${s.replace(/^\/+/, "")}`;
+  
+  // Relative path - prepend API_BASE
+  const result = `${API_BASE.replace(/\/+$/, "")}/${s.replace(/^\/+/, "")}`;
+  console.log("Resolved relative path:", s, "->", result);
+  return result;
 }
 
+/* ---------- STORAGE HELPERS ---------- */
 function readJSON(key, fallback = null) {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw);
-  } catch {
+  } catch (e) {
+    console.warn(`Failed to read from localStorage [${key}]:`, e);
     return fallback;
   }
 }
+
+/* ---------- FETCH IMAGE AS DATA URL ---------- */
+/* Note: No longer needed - BusinessProfile now sends images as base64 data URLs */
+
 function writeJSON(key, val) {
   try {
     localStorage.setItem(key, JSON.stringify(val));
-  } catch {}
+  } catch (e) {
+    console.warn(`Failed to write to localStorage [${key}]:`, e);
+  }
 }
 
-/* ---------- local invoices helpers (fallback) ---------- */
 function getStoredInvoices() {
   return readJSON("invoices_v1", []) || [];
 }
+
 function saveStoredInvoices(arr) {
   writeJSON("invoices_v1", arr);
 }
 
-/* ---------- util ---------- */
+/* ---------- UTILITIES ---------- */
 function uid() {
   try {
-    if (typeof crypto !== "undefined" && crypto.randomUUID)
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
       return crypto.randomUUID();
-  } catch {}
+    }
+  } catch (e) {
+    console.warn("crypto.randomUUID unavailable:", e);
+  }
   return Math.random().toString(36).slice(2, 9);
 }
+
 function currencyFmt(amount = 0, currency = "LKR") {
   try {
     if (currency === "LKR") {
       return new Intl.NumberFormat("en-LK", {
         style: "currency",
         currency: "LKR",
-        currencyDisplay: "symbol", // shows Rs
+        currencyDisplay: "symbol",
       }).format(amount);
     }
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
     }).format(amount);
-  } catch {
+  } catch (e) {
+    console.warn("Currency formatting failed:", e);
     return `${currency} ${amount}`;
   }
 }
@@ -92,7 +112,7 @@ function currencyFmt(amount = 0, currency = "LKR") {
 function computeTotals(items = [], taxPercent = 0) {
   const safe = Array.isArray(items) ? items.filter(Boolean) : [];
   const subtotal = safe.reduce(
-    (s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0),
+    (s, it) => s + Number(it?.qty || 0) * Number(it?.unitPrice || 0),
     0
   );
   const tax = (subtotal * Number(taxPercent || 0)) / 100;
@@ -100,101 +120,78 @@ function computeTotals(items = [], taxPercent = 0) {
   return { subtotal, tax, total };
 }
 
-/* ---------- icons ---------- (kept same as before) */
+/* ---------- ICONS ---------- */
 const PreviewIcon = ({ className = "w-4 h-4" }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
+
 const SaveIcon = ({ className = "w-4 h-4" }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
     <polyline points="17 21 17 13 7 13 7 21" />
     <polyline points="7 3 7 8 15 8" />
   </svg>
 );
+
 const UploadIcon = ({ className = "w-4 h-4" }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <polyline points="17 8 12 3 7 8" />
     <line x1="12" y1="3" x2="12" y2="15" />
   </svg>
 );
+
 const DeleteIcon = ({ className = "w-4 h-4" }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
   </svg>
 );
+
 const AddIcon = ({ className = "w-4 h-4" }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M12 5v14m-7-7h14" />
   </svg>
 );
 
-/* ---------- Component (Create / Edit Invoice) ---------- */
+/* ---------- COMPONENT ---------- */
 export default function CreateInvoice() {
   const navigate = useNavigate();
-  const { id } = useParams(); // if editing, id will be present
+  const { id } = useParams();
   const loc = useLocation();
-  const invoiceFromState =
-    loc.state && loc.state.invoice ? loc.state.invoice : null;
+  const invoiceFromState = loc.state?.invoice ?? null;
   const isEditing = Boolean(id && id !== "new");
 
-  // Clerk auth hooks
   const { getToken, isSignedIn } = useAuth();
 
-  // helper to obtain token with a retry
+  // Store fetched business profile data
+  const profileRef = useRef({
+    logoDataUrl: null,
+    stampDataUrl: null,
+    signatureDataUrl: null,
+    signatureName: "",
+    signatureTitle: "",
+    taxPercent: 18,
+  });
+
   const obtainToken = useCallback(async () => {
     if (typeof getToken !== "function") return null;
     try {
-      let token = await getToken({ template: "default" }).catch(() => null);
-      if (!token) {
-        token = await getToken({ forceRefresh: true }).catch(() => null);
-      }
+      let token = await getToken().catch(() => null);
+      if (!token) token = await getToken({ forceRefresh: true }).catch(() => null);
       return token;
-    } catch (err) {
+    } catch (e) {
+      console.warn("Token retrieval failed:", e);
       return null;
     }
   }, [getToken]);
 
-  // invoice & items state
   function buildDefaultInvoice() {
-    // Use a safe client-side local id for previews and local storage.
-    const localId = uid();
     return {
-      id: localId, // local preview id (server will return _id after save)
-      invoiceNumber: "", // will be set on creation by generator
+      id: uid(),
+      invoiceNumber: "",
       issueDate: new Date().toISOString().slice(0, 10),
       dueDate: "",
       fromBusinessName: "",
@@ -203,9 +200,7 @@ export default function CreateInvoice() {
       fromPhone: "",
       fromGst: "",
       client: { name: "", email: "", address: "", phone: "" },
-      items: [
-        { id: uid(), description: "Service / Item", qty: 1, unitPrice: 0 },
-      ],
+      items: [{ id: uid(), description: "Service / Item", qty: 1, unitPrice: 0 }],
       currency: "LKR",
       status: "draft",
       stampDataUrl: null,
@@ -213,8 +208,7 @@ export default function CreateInvoice() {
       logoDataUrl: null,
       signatureName: "",
       signatureTitle: "",
-      // leave taxPercent undefined so business profile default can fill it
-      taxPercent: undefined,
+      taxPercent: 18,
       notes: "",
     };
   }
@@ -222,14 +216,13 @@ export default function CreateInvoice() {
   const [invoice, setInvoice] = useState(() => buildDefaultInvoice());
   const [items, setItems] = useState(invoice.items || []);
   const [loading, setLoading] = useState(false);
+  const [hasLoadedProfile, setHasLoadedProfile] = useState(false);
 
-  // profile fetched from server
-  const [profile, setProfile] = useState(null);
-
-  /* ---------- helpers for invoice editing ---------- */
+  /* ---------- FIELD UPDATE HELPERS ---------- */
   function updateInvoiceField(field, value) {
     setInvoice((inv) => (inv ? { ...inv, [field]: value } : inv));
   }
+
   function updateClient(field, value) {
     setInvoice((inv) =>
       inv ? { ...inv, client: { ...(inv.client || {}), [field]: value } } : inv
@@ -240,13 +233,17 @@ export default function CreateInvoice() {
     setItems((arr) => {
       const copy = arr.slice();
       const it = { ...(copy[idx] || {}) };
-      if (key === "description") it.description = value;
-      else it[key] = Number(value) || 0;
+      if (key === "description") {
+        it.description = value;
+      } else {
+        it[key] = Number(value) || 0;
+      }
       copy[idx] = it;
       setInvoice((inv) => (inv ? { ...inv, items: copy } : inv));
       return copy;
     });
   }
+
   function addItem() {
     const it = { id: uid(), description: "", qty: 1, unitPrice: 0 };
     setItems((arr) => {
@@ -255,6 +252,7 @@ export default function CreateInvoice() {
       return next;
     });
   }
+
   function removeItem(idx) {
     setItems((arr) => {
       const next = arr.filter((_, i) => i !== idx);
@@ -263,234 +261,221 @@ export default function CreateInvoice() {
     });
   }
 
-  /* status & currency handlers */
   function handleStatusChange(newStatus) {
     setInvoice((inv) => (inv ? { ...inv, status: newStatus } : inv));
   }
+
   function handleCurrencyChange(newCurrency) {
     setInvoice((inv) => (inv ? { ...inv, currency: newCurrency } : inv));
   }
 
-  /* images - keep as data URLs in the invoice object */
   function handleImageUpload(file, kind = "logo") {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target.result;
-      setInvoice((inv) =>
-        inv
-          ? {
-              ...inv,
-              [`${kind}DataUrl`]: dataUrl,
-              ...(kind === "logo" ? { logoDataUrl: dataUrl } : {}),
-            }
-          : inv
-      );
+      setInvoice((inv) => (inv ? { ...inv, [`${kind}DataUrl`]: dataUrl } : inv));
+    };
+    reader.onerror = () => {
+      console.error(`Failed to read file for ${kind}`);
+      alert(`Failed to upload ${kind}. Please try again.`);
     };
     reader.readAsDataURL(file);
   }
+
   function removeImage(kind = "logo") {
-    setInvoice((inv) =>
-      inv
-        ? {
-            ...inv,
-            [`${kind}DataUrl`]: null,
-            ...(kind === "logo" ? { logoDataUrl: null } : {}),
-          }
-        : inv
-    );
+    setInvoice((inv) => (inv ? { ...inv, [`${kind}DataUrl`]: null } : inv));
   }
 
-  /* ---------- helper: check candidate invoiceNumber exists on server/local ---------- */
+  /* ---------- INVOICE NUMBER HELPERS ---------- */
   const checkInvoiceExists = useCallback(
     async (candidate) => {
       // Check local storage first
       const local = getStoredInvoices();
-      if (local.some((x) => x && x.invoiceNumber === candidate)) return true;
+      if (local.some((x) => x?.invoiceNumber === candidate)) return true;
 
-      // If we have token, ask server
+      // Check server if token available
       try {
         const token = await obtainToken();
         const headers = { Accept: "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const res = await fetch(
-          `${API_BASE}/api/invoice?invoiceNumber=${encodeURIComponent(
-            candidate
-          )}`,
-          { method: "GET", headers }
+          `${API_BASE}/api/invoice?invoiceNumber=${encodeURIComponent(candidate)}`,
+          { method: "GET", headers, timeout: 5000 }
         );
-        if (!res.ok) {
-          return false;
-        }
+
+        if (!res.ok) return false;
         const json = await res.json().catch(() => null);
         const data = json?.data || json || [];
-        if (Array.isArray(data) && data.length > 0) return true;
-        return false;
-      } catch (err) {
+        return Array.isArray(data) && data.length > 0;
+      } catch (e) {
+        console.warn("Invoice existence check failed:", e);
         return false;
       }
     },
     [obtainToken]
   );
 
-  /* ---------- generator: create a candidate and ensure uniqueness (tries up to N times) ---------- */
   const generateUniqueInvoiceNumber = useCallback(
     async (attempts = 10) => {
       for (let i = 0; i < attempts; i++) {
-        const datePart = new Date()
-          .toISOString()
-          .slice(0, 10)
-          .replace(/-/g, "");
-        const rand = Math.floor(Math.random() * 9000) + 1000; // 4 digit
+        const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        const rand = Math.floor(Math.random() * 9000) + 1000;
         const candidate = `INV-${datePart}-${rand}`;
         const exists = await checkInvoiceExists(candidate);
         if (!exists) return candidate;
       }
-      return `INV-${new Date()
-        .toISOString()
-        .slice(0, 10)
-        .replace(/-/g, "")}-${uid().slice(0, 4)}`;
+      return `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${uid().slice(0, 4)}`;
     },
     [checkInvoiceExists]
   );
 
-  /* ---------- fetch business profile as soon as page loads (when signed in) ---------- */
+  /* ---------- FETCH BUSINESS PROFILE ---------- */
   useEffect(() => {
     let mounted = true;
 
     async function fetchBusinessProfile() {
       if (!isSignedIn) return;
+
       try {
         const token = await obtainToken();
         if (!token) return;
+
         const res = await fetch(`${API_BASE}/api/businessProfile/me`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
           },
+          timeout: 10000,
         });
+
         if (!res.ok) {
+          console.warn("Failed to fetch business profile:", res.status);
           return;
         }
+
         const json = await res.json().catch(() => null);
-        const data = json?.data || json || null;
+        const data = json?.data || json;
+
         if (!data || !mounted) return;
 
-        const serverProfile = {
-          businessName: data.businessName ?? "",
-          email: data.email ?? "",
-          address: data.address ?? "",
-          phone: data.phone ?? "",
-          gst: data.gst ?? "",
-          defaultTaxPercent: data.defaultTaxPercent ?? 18,
-          signatureOwnerName: data.signatureOwnerName ?? "",
-          signatureOwnerTitle: data.signatureOwnerTitle ?? "",
-          logoUrl: data.logoUrl ?? null,
-          stampUrl: data.stampUrl ?? null,
-          signatureUrl: data.signatureUrl ?? null,
-        };
+        // 🔍 DEBUG: Log what we're receiving from the API
+        console.log("Business Profile Data:", {
+          // ✅ FIX: correct field names are logoUrl/stampUrl/signatureUrl
+          logoUrl:      data.logoUrl,
+          stampUrl:     data.stampUrl,
+          signatureUrl: data.signatureUrl,
+          businessName: data.businessName,
+          email:        data.email,
+        });
 
-        setProfile(serverProfile);
+        // ✅ FIX: read logoUrl/stampUrl/signatureUrl (not logoDataUrl etc.)
+        const resolvedLogo      = resolveImageUrl(data.logoUrl);
+        const resolvedStamp     = resolveImageUrl(data.stampUrl);
+        const resolvedSignature = resolveImageUrl(data.signatureUrl);
 
+        // Apply to invoice immediately
         setInvoice((prev) => {
           if (!prev) return prev;
-          const shouldOverwriteBusinessName =
-            !prev.fromBusinessName || prev.fromBusinessName.trim() === "";
-          const shouldOverwriteEmail =
-            !prev.fromEmail || prev.fromEmail.trim() === "";
-          const shouldOverwriteAddress =
-            !prev.fromAddress || prev.fromAddress.trim() === "";
-          const shouldOverwritePhone =
-            !prev.fromPhone || prev.fromPhone.trim() === "";
-          const shouldOverwriteGst =
-            !prev.fromGst || prev.fromGst.trim() === "";
 
-          const merged = {
+          console.log("✅ Images from business profile:", {
+            logo:      resolvedLogo      ? "✓ loaded" : "✗ none",
+            stamp:     resolvedStamp     ? "✓ loaded" : "✗ none",
+            signature: resolvedSignature ? "✓ loaded" : "✗ none",
+          });
+
+          return {
             ...prev,
-            fromBusinessName: shouldOverwriteBusinessName
-              ? serverProfile.businessName
-              : prev.fromBusinessName,
-            fromEmail: shouldOverwriteEmail
-              ? serverProfile.email
-              : prev.fromEmail,
-            fromAddress: shouldOverwriteAddress
-              ? serverProfile.address
-              : prev.fromAddress,
-            fromPhone: shouldOverwritePhone
-              ? serverProfile.phone
-              : prev.fromPhone,
-            fromGst: shouldOverwriteGst ? serverProfile.gst : prev.fromGst,
-            logoDataUrl:
-              prev.logoDataUrl ||
-              resolveImageUrl(serverProfile.logoUrl) ||
-              null,
-            stampDataUrl:
-              prev.stampDataUrl ||
-              resolveImageUrl(serverProfile.stampUrl) ||
-              null,
-            signatureDataUrl:
-              prev.signatureDataUrl ||
-              resolveImageUrl(serverProfile.signatureUrl) ||
-              null,
-            signatureName:
-              prev.signatureName || serverProfile.signatureOwnerName || "",
-            signatureTitle:
-              prev.signatureTitle || serverProfile.signatureOwnerTitle || "",
+            fromBusinessName: prev.fromBusinessName || data.businessName || "",
+            fromEmail:        prev.fromEmail        || data.email        || "",
+            fromAddress:      prev.fromAddress      || data.address      || "",
+            fromPhone:        prev.fromPhone        || data.phone        || "",
+            fromGst:          prev.fromGst          || data.gst          || "",
+            logoDataUrl:      prev.logoDataUrl      || resolvedLogo,
+            stampDataUrl:     prev.stampDataUrl     || resolvedStamp,
+            signatureDataUrl: prev.signatureDataUrl || resolvedSignature,
+            signatureName:    prev.signatureName    || data.signatureOwnerName  || "",
+            signatureTitle:   prev.signatureTitle   || data.signatureOwnerTitle || "",
             taxPercent:
-              prev && prev.taxPercent !== undefined && prev.taxPercent !== null
+              prev.taxPercent !== undefined && prev.taxPercent !== null
                 ? prev.taxPercent
-                : serverProfile.defaultTaxPercent,
+                : data.defaultTaxPercent ?? 18,
           };
-
-          return merged;
         });
+
+        // Store in ref for prepare() effect
+        profileRef.current = {
+          logoDataUrl:      resolvedLogo      || null,
+          stampDataUrl:     resolvedStamp     || null,
+          signatureDataUrl: resolvedSignature || null,
+          signatureName:    data.signatureOwnerName  || "",
+          signatureTitle:   data.signatureOwnerTitle || "",
+          taxPercent:       data.defaultTaxPercent ?? 18,
+        };
+
+        setHasLoadedProfile(true);
       } catch (err) {
         console.warn("Failed to fetch business profile:", err);
+        setHasLoadedProfile(true);
       }
     }
 
     fetchBusinessProfile();
-
     return () => {
       mounted = false;
     };
   }, [isSignedIn, obtainToken]);
 
-  /* ---------- load invoice when editing (server first, fallback local) ---------- */
+  /* ---------- LOAD/PREPARE INVOICE ---------- */
   useEffect(() => {
     let mounted = true;
 
     async function prepare() {
+      function applyProfileImages(base) {
+        const prof = profileRef.current;
+        return {
+          ...base,
+          logoDataUrl:
+            resolveImageUrl(base.logoDataUrl ?? base.logoUrl ?? base.logo) ||
+            prof.logoDataUrl ||
+            null,
+          stampDataUrl:
+            resolveImageUrl(base.stampDataUrl ?? base.stampUrl ?? base.stamp) ||
+            prof.stampDataUrl ||
+            null,
+          signatureDataUrl:
+            resolveImageUrl(
+              base.signatureDataUrl ?? base.signatureUrl ?? base.signature
+            ) || prof.signatureDataUrl || null,
+          signatureName: base.signatureName || prof.signatureName || "",
+          signatureTitle: base.signatureTitle || prof.signatureTitle || "",
+          taxPercent:
+            base.taxPercent !== undefined && base.taxPercent !== null
+              ? base.taxPercent
+              : prof.taxPercent,
+        };
+      }
+
+      // Case 1: Invoice from navigation state
       if (invoiceFromState) {
-        const base = { ...buildDefaultInvoice(), ...invoiceFromState };
-
-        base.logoDataUrl =
-          resolveImageUrl(base.logoDataUrl ?? base.logoUrl ?? base.logo) ||
-          null;
-        base.stampDataUrl =
-          resolveImageUrl(base.stampDataUrl ?? base.stampUrl ?? base.stamp) ||
-          null;
-        base.signatureDataUrl =
-          resolveImageUrl(
-            base.signatureDataUrl ?? base.signatureUrl ?? base.signature
-          ) || null;
-
+        const base = applyProfileImages({
+          ...buildDefaultInvoice(),
+          ...invoiceFromState,
+        });
+        if (!mounted) return;
         setInvoice(base);
-
         setItems(
           Array.isArray(invoiceFromState.items)
             ? invoiceFromState.items.slice()
-            : invoiceFromState.items
-            ? [...invoiceFromState.items]
             : buildDefaultInvoice().items
         );
-
         return;
       }
 
-      if (isEditing && !invoiceFromState) {
+      // Case 2: Editing existing invoice
+      if (isEditing) {
         setLoading(true);
         try {
           const token = await obtainToken();
@@ -500,76 +485,39 @@ export default function CreateInvoice() {
           const res = await fetch(`${API_BASE}/api/invoice/${id}`, {
             method: "GET",
             headers,
+            timeout: 10000,
           });
+
           if (res.ok) {
             const json = await res.json().catch(() => null);
-            const data = json?.data || json || null;
+            const data = json?.data || json;
+
             if (data && mounted) {
-              const merged = { ...buildDefaultInvoice(), ...data };
-              merged.id = data._id ?? data.id ?? merged.id;
-              merged.invoiceNumber = data.invoiceNumber ?? merged.invoiceNumber;
-
-              merged.logoDataUrl =
-                resolveImageUrl(
-                  data.logoDataUrl ?? data.logoUrl ?? data.logo
-                ) ||
-                merged.logoDataUrl ||
-                null;
-              merged.stampDataUrl =
-                resolveImageUrl(
-                  data.stampDataUrl ?? data.stampUrl ?? data.stamp
-                ) ||
-                merged.stampDataUrl ||
-                null;
-              merged.signatureDataUrl =
-                resolveImageUrl(
-                  data.signatureDataUrl ?? data.signatureUrl ?? data.signature
-                ) ||
-                merged.signatureDataUrl ||
-                null;
-
+              const merged = applyProfileImages({
+                ...buildDefaultInvoice(),
+                ...data,
+                id: data._id ?? data.id ?? id,
+                invoiceNumber: data.invoiceNumber ?? "",
+              });
               setInvoice(merged);
-              setItems(
-                Array.isArray(data.items) ? data.items.slice() : merged.items
-              );
+              setItems(Array.isArray(data.items) ? data.items.slice() : merged.items);
               setLoading(false);
               return;
             }
           }
         } catch (err) {
-          console.warn(
-            "Server invoice fetch failed, will fallback to local:",
-            err
-          );
+          console.warn("Server invoice fetch failed, checking local storage:", err);
         } finally {
           setLoading(false);
         }
 
-        // fallback to local storage
+        // Fallback: Local storage
         const all = getStoredInvoices();
         const found = all.find(
           (x) => x && (x.id === id || x._id === id || x.invoiceNumber === id)
         );
         if (found && mounted) {
-          const fixed = { ...buildDefaultInvoice(), ...found };
-
-          fixed.logoDataUrl =
-            resolveImageUrl(found.logoDataUrl ?? found.logoUrl ?? found.logo) ||
-            fixed.logoDataUrl ||
-            null;
-          fixed.stampDataUrl =
-            resolveImageUrl(
-              found.stampDataUrl ?? found.stampUrl ?? found.stamp
-            ) ||
-            fixed.stampDataUrl ||
-            null;
-          fixed.signatureDataUrl =
-            resolveImageUrl(
-              found.signatureDataUrl ?? found.signatureUrl ?? found.signature
-            ) ||
-            fixed.signatureDataUrl ||
-            null;
-
+          const fixed = applyProfileImages({ ...buildDefaultInvoice(), ...found });
           setInvoice(fixed);
           setItems(
             Array.isArray(found.items)
@@ -577,13 +525,10 @@ export default function CreateInvoice() {
               : buildDefaultInvoice().items
           );
         }
-
         return;
       }
 
-      setInvoice((prev) => ({ ...buildDefaultInvoice(), ...prev }));
-      setItems(buildDefaultInvoice().items);
-
+      // Case 3: Creating new invoice
       if (!isEditing) {
         try {
           const candidate = await generateUniqueInvoiceNumber(10);
@@ -599,26 +544,34 @@ export default function CreateInvoice() {
     }
 
     prepare();
-
     return () => {
       mounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    id,
-    invoiceFromState,
-    isEditing,
-    obtainToken,
-    generateUniqueInvoiceNumber,
-  ]);
+  }, [id, invoiceFromState, isEditing, obtainToken, generateUniqueInvoiceNumber]);
 
-  /* ---------- Save invoice to backend (POST or PUT) using Clerk token ---------- */
+  /* ---------- SAVE INVOICE ---------- */
   async function handleSave() {
-    if (!invoice) return;
-    setLoading(true);
+    if (!invoice) {
+      alert("Invoice data missing. Please refresh and try again.");
+      return;
+    }
 
+    if (!invoice.invoiceNumber || !String(invoice.invoiceNumber).trim()) {
+      alert("Invoice number is required.");
+      return;
+    }
+
+    if (!items || items.length === 0) {
+      alert("Please add at least one item.");
+      return;
+    }
+
+    setLoading(true);
     try {
+      const totals = computeTotals(items, invoice.taxPercent);
       const prepared = {
+        invoiceNumber: String(invoice.invoiceNumber).trim(),
         issueDate: invoice.issueDate || "",
         dueDate: invoice.dueDate || "",
         fromBusinessName: invoice.fromBusinessName || "",
@@ -631,9 +584,9 @@ export default function CreateInvoice() {
         currency: invoice.currency || "LKR",
         status: invoice.status || "draft",
         taxPercent: Number(invoice.taxPercent ?? 18),
-        subtotal: computeTotals(items, invoice.taxPercent).subtotal,
-        tax: computeTotals(items, invoice.taxPercent).tax,
-        total: computeTotals(items, invoice.taxPercent).total,
+        subtotal: totals.subtotal,
+        tax: totals.tax,
+        total: totals.total,
         logoDataUrl: invoice.logoDataUrl || null,
         stampDataUrl: invoice.stampDataUrl || null,
         signatureDataUrl: invoice.signatureDataUrl || null,
@@ -642,13 +595,6 @@ export default function CreateInvoice() {
         notes: invoice.notes || "",
         localId: invoice.id,
       };
-
-      if (
-        invoice.invoiceNumber &&
-        String(invoice.invoiceNumber).trim().length > 0
-      ) {
-        prepared.invoiceNumber = String(invoice.invoiceNumber).trim();
-      }
 
       const endpoint =
         isEditing && invoice.id
@@ -668,26 +614,24 @@ export default function CreateInvoice() {
 
       if (res.status === 409) {
         const json = await res.json().catch(() => null);
-        const message = json?.message || "Invoice number already exists.";
-        throw new Error(message);
+        throw new Error(
+          json?.message || "Invoice number already exists. Choose another."
+        );
+      }
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.message || `Save failed (${res.status})`);
       }
 
       const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        const msg = json?.message || `Save failed (${res.status})`;
-        throw new Error(msg);
-      }
-
       const saved = json?.data || json || null;
       const savedId = saved?._id ?? saved?.id ?? invoice.id;
 
       const merged = {
         ...prepared,
         id: savedId,
-        invoiceNumber:
-          saved?.invoiceNumber ??
-          prepared.invoiceNumber ??
-          invoice.invoiceNumber,
+        invoiceNumber: saved?.invoiceNumber ?? prepared.invoiceNumber,
         subtotal: saved?.subtotal ?? prepared.subtotal,
         tax: saved?.tax ?? prepared.tax,
         total: saved?.total ?? prepared.total,
@@ -696,6 +640,7 @@ export default function CreateInvoice() {
       setInvoice((inv) => ({ ...inv, ...merged }));
       setItems(Array.isArray(saved?.items) ? saved.items : items);
 
+      // Update local storage
       const all = getStoredInvoices();
       if (isEditing) {
         const idx = all.findIndex(
@@ -705,8 +650,11 @@ export default function CreateInvoice() {
               x._id === invoice.id ||
               x.invoiceNumber === invoice.invoiceNumber)
         );
-        if (idx >= 0) all[idx] = merged;
-        else all.unshift(merged);
+        if (idx >= 0) {
+          all[idx] = merged;
+        } else {
+          all.unshift(merged);
+        }
       } else {
         all.unshift(merged);
       }
@@ -715,28 +663,27 @@ export default function CreateInvoice() {
       alert(`Invoice ${isEditing ? "updated" : "created"} successfully.`);
       navigate("/app/invoices");
     } catch (err) {
-      console.error("Failed to save invoice to server:", err);
+      console.error("Failed to save invoice:", err);
 
-      if (
-        String(err?.message || "")
-          .toLowerCase()
-          .includes("invoice number")
-      ) {
+      // Check for invoice number conflict
+      if (String(err?.message || "").toLowerCase().includes("invoice number")) {
         alert(err.message || "Invoice number already exists. Choose another.");
         setLoading(false);
         return;
       }
 
-      // fallback: save locally
+      // Fallback to local storage
       try {
+        const totals = computeTotals(items, invoice.taxPercent);
         const all = getStoredInvoices();
         const preparedLocal = {
           ...invoice,
           items,
-          subtotal: computeTotals(items, invoice.taxPercent).subtotal,
-          tax: computeTotals(items, invoice.taxPercent).tax,
-          total: computeTotals(items, invoice.taxPercent).total,
+          subtotal: totals.subtotal,
+          tax: totals.tax,
+          total: totals.total,
         };
+
         if (isEditing) {
           const idx = all.findIndex(
             (x) =>
@@ -745,17 +692,24 @@ export default function CreateInvoice() {
                 x._id === invoice.id ||
                 x.invoiceNumber === invoice.invoiceNumber)
           );
-          if (idx >= 0) all[idx] = preparedLocal;
-          else all.unshift(preparedLocal);
+          if (idx >= 0) {
+            all[idx] = preparedLocal;
+          } else {
+            all.unshift(preparedLocal);
+          }
         } else {
           all.unshift(preparedLocal);
         }
         saveStoredInvoices(all);
-        alert("Saved locally as fallback (server error).");
+        alert(
+          "Saved to local storage (server unavailable). Changes will sync when online."
+        );
         navigate("/app/invoices");
       } catch (localErr) {
         console.error("Local fallback failed:", localErr);
-        alert(err?.message || "Save failed. See console.");
+        alert(
+          err?.message || "Save failed. Please check your connection and try again."
+        );
       }
     } finally {
       setLoading(false);
@@ -763,24 +717,23 @@ export default function CreateInvoice() {
   }
 
   function handlePreview() {
+    const totals = computeTotals(items, invoice.taxPercent);
     const prepared = {
       ...invoice,
       items,
-      subtotal: computeTotals(items, invoice.taxPercent).subtotal,
-      tax: computeTotals(items, invoice.taxPercent).tax,
-      total: computeTotals(items, invoice.taxPercent).total,
+      subtotal: totals.subtotal,
+      tax: totals.tax,
+      total: totals.total,
     };
-    navigate(`/app/invoices/${invoice.id}/preview`, {
-      state: { invoice: prepared },
-    });
+    navigate(`/app/invoices/${invoice.id}/preview`, { state: { invoice: prepared } });
   }
 
   const totals = computeTotals(items, invoice?.taxPercent ?? 18);
 
-  /* ---------- JSX ---------- */
+  /* ---------- RENDER ---------- */
   return (
     <div className={createInvoiceStyles.pageContainer}>
-      {/* Header Section */}
+      {/* Header */}
       <div className={createInvoiceStyles.headerContainer}>
         <div>
           <h1 className={createInvoiceStyles.headerTitle}>
@@ -792,14 +745,13 @@ export default function CreateInvoice() {
               : "Fill in invoice details, add line items, and configure branding"}
           </p>
         </div>
-
         <div className={createInvoiceStyles.headerButtonContainer}>
           <button
             onClick={handlePreview}
             className={createInvoiceStyles.previewButton}
+            disabled={loading}
           >
-            <PreviewIcon className="w-4 h-4" />
-            Preview
+            <PreviewIcon className="w-4 h-4" /> Preview
           </button>
           <button
             onClick={handleSave}
@@ -807,16 +759,12 @@ export default function CreateInvoice() {
             className={createInvoiceStyles.saveButton}
           >
             <SaveIcon className="w-4 h-4" />
-            {loading
-              ? "Saving..."
-              : isEditing
-              ? "Update Invoice"
-              : "Create Invoice"}
+            {loading ? "Saving..." : isEditing ? "Update Invoice" : "Create Invoice"}
           </button>
         </div>
       </div>
 
-      {/* Invoice Header Section */}
+      {/* Invoice Details Card */}
       <div className={createInvoiceStyles.cardContainer}>
         <div className={createInvoiceStyles.cardHeaderContainer}>
           <div
@@ -843,27 +791,30 @@ export default function CreateInvoice() {
           <div>
             <label className={createInvoiceStyles.label}>Invoice Number</label>
             <input
+              id="invoiceNumber"
+              name="invoiceNumber"
               value={invoice?.invoiceNumber || ""}
-              onChange={(e) =>
-                updateInvoiceField("invoiceNumber", e.target.value)
-              }
+              onChange={(e) => updateInvoiceField("invoiceNumber", e.target.value)}
               className={createInvoiceStyles.inputMedium}
+              placeholder="INV-20240101-1234"
             />
           </div>
-
           <div>
             <label className={createInvoiceStyles.label}>Invoice Date</label>
             <input
+              id="issueDate"
+              name="issueDate"
               type="date"
               value={invoice?.issueDate || ""}
               onChange={(e) => updateInvoiceField("issueDate", e.target.value)}
               className={createInvoiceStyles.input}
             />
           </div>
-
           <div>
             <label className={createInvoiceStyles.label}>Due Date</label>
             <input
+              id="dueDate"
+              name="dueDate"
               type="date"
               value={invoice?.dueDate || ""}
               onChange={(e) => updateInvoiceField("dueDate", e.target.value)}
@@ -872,13 +823,10 @@ export default function CreateInvoice() {
           </div>
         </div>
 
-        {/* Currency and Status Section */}
+        {/* Currency and Status */}
         <div className={createInvoiceStyles.currencyStatusGrid}>
-          {/* Currency Selection */}
           <div>
-            <label className={createInvoiceStyles.labelWithMargin}>
-              Currency
-            </label>
+            <label className={createInvoiceStyles.labelWithMargin}>Currency</label>
             <div className={createInvoiceStyles.currencyContainer}>
               <button
                 onClick={() => handleCurrencyChange("LKR")}
@@ -888,15 +836,12 @@ export default function CreateInvoice() {
                     : createInvoiceStyles.currencyButtonInactive
                 }`}
               >
-                <span className={createInvoiceCustomStyles.currencySymbol}>
-                  Rs
-                </span>
+                <span className={createInvoiceCustomStyles.currencySymbol}>Rs</span>
                 <div className="text-left">
                   <div className="font-medium">Sri Lankan Rupee</div>
                   <div className="text-xs opacity-70">LKR</div>
                 </div>
               </button>
-
               <button
                 onClick={() => handleCurrencyChange("USD")}
                 className={`${createInvoiceStyles.currencyButton} ${
@@ -905,9 +850,7 @@ export default function CreateInvoice() {
                     : createInvoiceStyles.currencyButtonInactive
                 }`}
               >
-                <span className={createInvoiceCustomStyles.currencySymbol}>
-                  $
-                </span>
+                <span className={createInvoiceCustomStyles.currencySymbol}>$</span>
                 <div className="text-left">
                   <div className="font-medium">US Dollar</div>
                   <div className="text-xs opacity-70">USD</div>
@@ -916,11 +859,8 @@ export default function CreateInvoice() {
             </div>
           </div>
 
-          {/* Status Selection */}
           <div>
-            <label className={createInvoiceStyles.labelWithMargin}>
-              Status
-            </label>
+            <label className={createInvoiceStyles.labelWithMargin}>Status</label>
             <div className={createInvoiceStyles.statusContainer}>
               {[
                 { value: "draft", label: "Draft" },
@@ -937,17 +877,14 @@ export default function CreateInvoice() {
                       : createInvoiceStyles.statusButtonInactive
                   }`}
                 >
-                  <StatusBadge
-                    status={status.label}
-                    size="default"
-                    showIcon={true}
-                  />
+                  <StatusBadge status={status.label} size="default" showIcon={true} />
                 </button>
               ))}
             </div>
-
             <div className={createInvoiceStyles.statusDropdown}>
               <select
+                id="invoiceStatus"
+                name="invoiceStatus"
                 value={invoice.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
                 className="w-full"
@@ -962,8 +899,9 @@ export default function CreateInvoice() {
         </div>
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Grid */}
       <div className={createInvoiceStyles.mainGrid}>
+        {/* Left Column */}
         <div className={createInvoiceStyles.leftColumn}>
           {/* Bill From */}
           <div className={createInvoiceStyles.cardContainer}>
@@ -986,17 +924,14 @@ export default function CreateInvoice() {
                 <h3 className={createInvoiceStyles.cardTitle}>Bill From</h3>
               </div>
             </div>
-
             <div className={createInvoiceStyles.gridCols2}>
               <div>
-                <label className={createInvoiceStyles.label}>
-                  Business Name
-                </label>
+                <label className={createInvoiceStyles.label}>Business Name</label>
                 <input
+                  id="fromBusinessName"
+                  name="fromBusinessName"
                   value={invoice?.fromBusinessName ?? ""}
-                  onChange={(e) =>
-                    updateInvoiceField("fromBusinessName", e.target.value)
-                  }
+                  onChange={(e) => updateInvoiceField("fromBusinessName", e.target.value)}
                   placeholder="Your Business Name"
                   className={createInvoiceStyles.input}
                 />
@@ -1004,10 +939,10 @@ export default function CreateInvoice() {
               <div>
                 <label className={createInvoiceStyles.label}>Email</label>
                 <input
+                  id="fromEmail"
+                  name="fromEmail"
                   value={invoice?.fromEmail ?? ""}
-                  onChange={(e) =>
-                    updateInvoiceField("fromEmail", e.target.value)
-                  }
+                  onChange={(e) => updateInvoiceField("fromEmail", e.target.value)}
                   placeholder="business@email.com"
                   className={createInvoiceStyles.input}
                 />
@@ -1015,10 +950,10 @@ export default function CreateInvoice() {
               <div className={createInvoiceStyles.gridColSpan2}>
                 <label className={createInvoiceStyles.label}>Address</label>
                 <textarea
+                  id="fromAddress"
+                  name="fromAddress"
                   value={invoice?.fromAddress ?? ""}
-                  onChange={(e) =>
-                    updateInvoiceField("fromAddress", e.target.value)
-                  }
+                  onChange={(e) => updateInvoiceField("fromAddress", e.target.value)}
                   placeholder="Business Address"
                   rows={3}
                   className={createInvoiceStyles.textarea}
@@ -1027,10 +962,10 @@ export default function CreateInvoice() {
               <div>
                 <label className={createInvoiceStyles.label}>Phone</label>
                 <input
+                  id="fromPhone"
+                  name="fromPhone"
                   value={invoice?.fromPhone ?? ""}
-                  onChange={(e) =>
-                    updateInvoiceField("fromPhone", e.target.value)
-                  }
+                  onChange={(e) => updateInvoiceField("fromPhone", e.target.value)}
                   placeholder="+94 11 234 5678"
                   className={createInvoiceStyles.input}
                 />
@@ -1038,10 +973,10 @@ export default function CreateInvoice() {
               <div>
                 <label className={createInvoiceStyles.label}>VAT Number</label>
                 <input
+                  id="fromGst"
+                  name="fromGst"
                   value={invoice?.fromGst ?? ""}
-                  onChange={(e) =>
-                    updateInvoiceField("fromGst", e.target.value)
-                  }
+                  onChange={(e) => updateInvoiceField("fromGst", e.target.value)}
                   placeholder="VAT123456789"
                   className={createInvoiceStyles.input}
                 />
@@ -1068,11 +1003,12 @@ export default function CreateInvoice() {
               </div>
               <h3 className={createInvoiceStyles.cardTitle}>Bill To</h3>
             </div>
-
             <div className={createInvoiceStyles.gridCols2}>
               <div>
                 <label className={createInvoiceStyles.label}>Client Name</label>
                 <input
+                  id="clientName"
+                  name="clientName"
                   value={invoice?.client?.name || ""}
                   onChange={(e) => updateClient("name", e.target.value)}
                   placeholder="Client Name"
@@ -1080,10 +1016,10 @@ export default function CreateInvoice() {
                 />
               </div>
               <div>
-                <label className={createInvoiceStyles.label}>
-                  Client Email
-                </label>
+                <label className={createInvoiceStyles.label}>Client Email</label>
                 <input
+                  id="clientEmail"
+                  name="clientEmail"
                   value={invoice?.client?.email || ""}
                   onChange={(e) => updateClient("email", e.target.value)}
                   placeholder="client@email.com"
@@ -1091,10 +1027,10 @@ export default function CreateInvoice() {
                 />
               </div>
               <div className={createInvoiceStyles.gridColSpan2}>
-                <label className={createInvoiceStyles.label}>
-                  Client Address
-                </label>
+                <label className={createInvoiceStyles.label}>Client Address</label>
                 <textarea
+                  id="clientAddress"
+                  name="clientAddress"
                   value={invoice?.client?.address || ""}
                   onChange={(e) => updateClient("address", e.target.value)}
                   placeholder="Client Address"
@@ -1103,10 +1039,10 @@ export default function CreateInvoice() {
                 />
               </div>
               <div>
-                <label className={createInvoiceStyles.label}>
-                  Client Phone
-                </label>
+                <label className={createInvoiceStyles.label}>Client Phone</label>
                 <input
+                  id="clientPhone"
+                  name="clientPhone"
                   value={invoice?.client?.phone || ""}
                   onChange={(e) => updateClient("phone", e.target.value)}
                   placeholder="+94 11 234 5678"
@@ -1133,28 +1069,23 @@ export default function CreateInvoice() {
                     <line x1="12" y1="8" x2="12" y2="16" />
                   </svg>
                 </div>
-                <h3 className={createInvoiceStyles.cardTitle}>
-                  Items & Services
-                </h3>
+                <h3 className={createInvoiceStyles.cardTitle}>Items & Services</h3>
               </div>
               <div className={createInvoiceStyles.currencyBadge}>
                 All amounts in {invoice.currency}
               </div>
             </div>
 
-            {/* Items list */}
             <div className={createInvoiceStyles.itemsListWrapper}>
               {items.map((it, idx) => {
                 const totalValue =
                   Number(it?.qty || 0) * Number(it?.unitPrice || 0);
                 const totalLabel = currencyFmt(totalValue, invoice.currency);
-
                 return (
                   <div
                     key={it?.id ?? idx}
                     className={`${createInvoiceStyles.itemsTableRow} ${createInvoiceStyles.itemRow}`}
                   >
-                    {/* Description */}
                     <div className={createInvoiceStyles.itemColDescription}>
                       <label
                         className={createInvoiceStyles.itemsFieldLabel}
@@ -1174,8 +1105,6 @@ export default function CreateInvoice() {
                         aria-label={`Item ${idx + 1} description`}
                       />
                     </div>
-
-                    {/* Quantity */}
                     <div className={createInvoiceStyles.itemColQuantity}>
                       <label
                         className={createInvoiceStyles.itemsFieldLabel}
@@ -1191,12 +1120,9 @@ export default function CreateInvoice() {
                         className={createInvoiceStyles.itemsNumberInput}
                         value={String(it?.qty ?? "")}
                         onChange={(e) => updateItem(idx, "qty", e.target.value)}
-                        title={String(it?.qty ?? "")}
                         aria-label={`Item ${idx + 1} quantity`}
                       />
                     </div>
-
-                    {/* Unit Price */}
                     <div className={createInvoiceStyles.itemColUnitPrice}>
                       <label
                         className={createInvoiceStyles.itemsFieldLabel}
@@ -1213,12 +1139,9 @@ export default function CreateInvoice() {
                         onChange={(e) =>
                           updateItem(idx, "unitPrice", e.target.value)
                         }
-                        title={String(it?.unitPrice ?? "")}
                         aria-label={`Item ${idx + 1} unit price`}
                       />
                     </div>
-
-                    {/* Total */}
                     <div className={createInvoiceStyles.itemColTotal}>
                       <label
                         className={createInvoiceStyles.itemsFieldLabel}
@@ -1234,15 +1157,12 @@ export default function CreateInvoice() {
                         {totalLabel}
                       </div>
                     </div>
-
-                    {/* Remove */}
                     <div className={createInvoiceStyles.itemColRemove}>
                       <button
                         type="button"
                         onClick={() => removeItem(idx)}
                         className={createInvoiceStyles.itemsRemoveButton}
                         aria-label={`Remove item ${idx + 1}`}
-                        title="Remove item"
                       >
                         <DeleteIcon className="w-4 h-4" />
                       </button>
@@ -1253,10 +1173,7 @@ export default function CreateInvoice() {
             </div>
 
             <div className="mt-6">
-              <button
-                onClick={addItem}
-                className={createInvoiceStyles.addItemButton}
-              >
+              <button onClick={addItem} className={createInvoiceStyles.addItemButton}>
                 <AddIcon
                   className={`w-4 h-4 ${createInvoiceStyles.iconHover}`}
                 />{" "}
@@ -1268,29 +1185,22 @@ export default function CreateInvoice() {
 
         {/* Right Column */}
         <div className={createInvoiceStyles.rightColumn}>
-          {/* Logo & Branding */}
+          {/* Branding / Logo */}
           <div className={createInvoiceStyles.cardSmallContainer}>
             <h3 className={createInvoiceStyles.cardSubtitle}>Branding</h3>
-
             <div className="space-y-4">
               <div>
-                <label className={createInvoiceStyles.label}>
-                  Company Logo
-                </label>
+                <label className={createInvoiceStyles.label}>Company Logo</label>
                 <div className={createInvoiceStyles.uploadSmallArea}>
                   {invoice?.logoDataUrl ? (
                     <div className={createInvoiceStyles.imagePreviewContainer}>
                       <div className={createInvoiceStyles.logoPreview}>
                         <img
                           src={invoice.logoDataUrl}
-                          alt="logo"
+                          alt="Company Logo"
                           className="object-contain w-full h-full"
                           onError={(e) => {
                             e.currentTarget.style.display = "none";
-                            console.warn(
-                              "[CreateInvoice] failed to load logo preview:",
-                              invoice.logoDataUrl
-                            );
                           }}
                         />
                       </div>
@@ -1299,12 +1209,10 @@ export default function CreateInvoice() {
                           <UploadIcon className="w-4 h-4" /> Change
                           <input
                             type="file"
+                            name="logoUpload"
                             accept="image/*"
                             onChange={(e) =>
-                              handleImageUpload(
-                                e.target.files && e.target.files[0],
-                                "logo"
-                              )
+                              handleImageUpload(e.target.files?.[0], "logo")
                             }
                             className="hidden"
                           />
@@ -1322,9 +1230,7 @@ export default function CreateInvoice() {
                       <div
                         className={`${createInvoiceStyles.imagePreviewContainer} ${createInvoiceStyles.hoverScale}`}
                       >
-                        <div
-                          className={createInvoiceStyles.uploadIconContainer}
-                        >
+                        <div className={createInvoiceStyles.uploadIconContainer}>
                           <UploadIcon className="w-5 h-5" />
                         </div>
                         <div>
@@ -1337,12 +1243,10 @@ export default function CreateInvoice() {
                         </div>
                         <input
                           type="file"
+                          name="logoUpload"
                           accept="image/*"
                           onChange={(e) =>
-                            handleImageUpload(
-                              e.target.files && e.target.files[0],
-                              "logo"
-                            )
+                            handleImageUpload(e.target.files?.[0], "logo")
                           }
                           className="hidden"
                         />
@@ -1364,20 +1268,18 @@ export default function CreateInvoice() {
                   {currencyFmt(totals.subtotal, invoice.currency)}
                 </div>
               </div>
-
               <div className="space-y-3">
                 <div>
                   <label className={createInvoiceStyles.label}>
                     Tax Percentage
                   </label>
                   <input
+                    id="taxPercent"
+                    name="taxPercent"
                     type="number"
                     value={invoice.taxPercent ?? 18}
                     onChange={(e) =>
-                      updateInvoiceField(
-                        "taxPercent",
-                        Number(e.target.value || 0)
-                      )
+                      updateInvoiceField("taxPercent", Number(e.target.value || 0))
                     }
                     className={createInvoiceStyles.inputCenter}
                     min="0"
@@ -1385,7 +1287,6 @@ export default function CreateInvoice() {
                     step="0.1"
                   />
                 </div>
-
                 <div className={createInvoiceStyles.taxRow}>
                   <div className="text-sm text-gray-600">Tax Amount</div>
                   <div className="font-medium text-gray-900">
@@ -1393,7 +1294,6 @@ export default function CreateInvoice() {
                   </div>
                 </div>
               </div>
-
               <div className={createInvoiceStyles.totalRow}>
                 <div className={createInvoiceStyles.totalLabel}>Total</div>
                 <div className={createInvoiceStyles.totalValue}>
@@ -1405,30 +1305,21 @@ export default function CreateInvoice() {
 
           {/* Stamp & Signature */}
           <div className={createInvoiceStyles.cardSmallContainer}>
-            <h3 className={createInvoiceStyles.cardSubtitle}>
-              Stamp & Signature
-            </h3>
-
+            <h3 className={createInvoiceStyles.cardSubtitle}>Stamp & Signature</h3>
             <div className="space-y-6">
               {/* Stamp */}
               <div>
-                <label className={createInvoiceStyles.label}>
-                  Digital Stamp
-                </label>
+                <label className={createInvoiceStyles.label}>Digital Stamp</label>
                 <div className={createInvoiceStyles.uploadSmallArea}>
                   {invoice.stampDataUrl ? (
                     <div className={createInvoiceStyles.imagePreviewContainer}>
                       <div className={createInvoiceStyles.stampPreview}>
                         <img
                           src={invoice.stampDataUrl}
-                          alt="stamp"
+                          alt="Digital Stamp"
                           className="object-contain w-full h-full"
                           onError={(e) => {
                             e.currentTarget.style.display = "none";
-                            console.warn(
-                              "[CreateInvoice] failed to load stamp preview:",
-                              invoice.stampDataUrl
-                            );
                           }}
                         />
                       </div>
@@ -1437,12 +1328,10 @@ export default function CreateInvoice() {
                           <UploadIcon className="w-4 h-4" /> Change
                           <input
                             type="file"
+                            name="stampUpload"
                             accept="image/*"
                             onChange={(e) =>
-                              handleImageUpload(
-                                e.target.files && e.target.files[0],
-                                "stamp"
-                              )
+                              handleImageUpload(e.target.files?.[0], "stamp")
                             }
                             className="hidden"
                           />
@@ -1460,11 +1349,7 @@ export default function CreateInvoice() {
                       <div
                         className={`${createInvoiceStyles.imagePreviewContainer} ${createInvoiceStyles.hoverScale}`}
                       >
-                        <div
-                          className={
-                            createInvoiceStyles.uploadSmallIconContainer
-                          }
-                        >
+                        <div className={createInvoiceStyles.uploadSmallIconContainer}>
                           <UploadIcon className="w-4 h-4" />
                         </div>
                         <div>
@@ -1477,12 +1362,10 @@ export default function CreateInvoice() {
                         </div>
                         <input
                           type="file"
+                          name="stampUpload"
                           accept="image/*"
                           onChange={(e) =>
-                            handleImageUpload(
-                              e.target.files && e.target.files[0],
-                              "stamp"
-                            )
+                            handleImageUpload(e.target.files?.[0], "stamp")
                           }
                           className="hidden"
                         />
@@ -1503,14 +1386,10 @@ export default function CreateInvoice() {
                       <div className={createInvoiceStyles.signaturePreview}>
                         <img
                           src={invoice.signatureDataUrl}
-                          alt="signature"
+                          alt="Digital Signature"
                           className="object-contain w-full h-full"
                           onError={(e) => {
                             e.currentTarget.style.display = "none";
-                            console.warn(
-                              "[CreateInvoice] failed to load signature preview:",
-                              invoice.signatureDataUrl
-                            );
                           }}
                         />
                       </div>
@@ -1519,12 +1398,10 @@ export default function CreateInvoice() {
                           <UploadIcon className="w-4 h-4" /> Change
                           <input
                             type="file"
+                            name="signatureUpload"
                             accept="image/*"
                             onChange={(e) =>
-                              handleImageUpload(
-                                e.target.files && e.target.files[0],
-                                "signature"
-                              )
+                              handleImageUpload(e.target.files?.[0], "signature")
                             }
                             className="hidden"
                           />
@@ -1542,11 +1419,7 @@ export default function CreateInvoice() {
                       <div
                         className={`${createInvoiceStyles.imagePreviewContainer} ${createInvoiceStyles.hoverScale}`}
                       >
-                        <div
-                          className={
-                            createInvoiceStyles.uploadSmallIconContainer
-                          }
-                        >
+                        <div className={createInvoiceStyles.uploadSmallIconContainer}>
                           <UploadIcon className="w-4 h-4" />
                         </div>
                         <div>
@@ -1559,12 +1432,10 @@ export default function CreateInvoice() {
                         </div>
                         <input
                           type="file"
+                          name="signatureUpload"
                           accept="image/*"
                           onChange={(e) =>
-                            handleImageUpload(
-                              e.target.files && e.target.files[0],
-                              "signature"
-                            )
+                            handleImageUpload(e.target.files?.[0], "signature")
                           }
                           className="hidden"
                         />
@@ -1580,6 +1451,8 @@ export default function CreateInvoice() {
                       Signature Owner Name
                     </label>
                     <input
+                      id="signatureName"
+                      name="signatureName"
                       placeholder="John Doe"
                       value={invoice.signatureName || ""}
                       onChange={(e) =>
@@ -1593,6 +1466,8 @@ export default function CreateInvoice() {
                       Signature Title / Designation
                     </label>
                     <input
+                      id="signatureTitle"
+                      name="signatureTitle"
                       placeholder="Director / CEO"
                       value={invoice.signatureTitle || ""}
                       onChange={(e) =>
